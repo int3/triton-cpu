@@ -20,6 +20,8 @@ TRITON_MAX_TENSOR_NUMEL = 1048576
 
 TRITON_BUILTIN = "__triton_builtin__"
 
+TRITON_RESOLVER = "__triton_resolver__"
+
 PropagateNan = ir.PROPAGATE_NAN
 
 
@@ -37,6 +39,16 @@ def builtin(fn: T) -> T:
     setattr(wrapper, TRITON_BUILTIN, True)
 
     return wrapper
+
+
+def resolved_by(resolver: Callable[..., Callable]):
+    """Mark a function symbol as needing a dynamic resolution step."""
+
+    def decorator(fn: T) -> T:
+        setattr(fn, TRITON_RESOLVER, resolver)
+        return fn
+
+    return decorator
 
 
 def _tensor_member_fn(fn: T) -> T:
@@ -108,6 +120,10 @@ def _unwrap_iterable(x):
 def is_builtin(fn) -> bool:
     """Is this a registered triton builtin function?"""
     return getattr(fn, TRITON_BUILTIN, False)
+
+
+def get_resolver(fn) -> Optional[Callable]:
+    return getattr(fn, TRITON_RESOLVER, None)
 
 
 @builtin

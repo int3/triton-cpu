@@ -1073,6 +1073,18 @@ class CodeGenerator(ast.NodeVisitor):
                 results.append(tensor(call_op.get_result(i), callee_ret_type[i]))
             return tuple(results)
 
+    def call_non_JitFunction(self, fn, *args, **kws):
+        if (hasattr(fn, '__self__') and _is_triton_tensor(fn.__self__)) or language.core.is_builtin(fn):
+            extra_kwargs = {"_builder": self.builder}
+            sig = inspect.signature(fn)
+            if '_generator' in sig.parameters:
+                extra_kwargs['_generator'] = self
+            return fn(*args, **extra_kwargs, **kws)
+
+        if fn in self.builtin_namespace.values():
+            args = map(_unwrap_if_constexpr, args)
+        return fn(*args, **kws)
+
     def visit_Call(self, node):
         fn = _unwrap_if_constexpr(self.visit(node.func))
         static_implementation = self.statically_implemented_functions.get(fn)
@@ -1081,31 +1093,27 @@ class CodeGenerator(ast.NodeVisitor):
 
         kws = dict(self.visit(keyword) for keyword in node.keywords)
         args = [self.visit(arg) for arg in node.args]
+
+        if resolver := language.core.get_resolver(fn):
+            fn = self.call_non_JitFunction(resolver, fn, *args, **kws)
+
         # TODO: this should not be so hardcoded
         if fn is language.core.device_assert and not self.debug:
             return
         if isinstance(fn, JITFunction):
             _check_fn_args(node, fn, args)
             return self.call_JitFunction(fn, args, kws)
-        if (hasattr(fn, '__self__') and _is_triton_tensor(fn.__self__)) or language.core.is_builtin(fn):
-            extra_kwargs = {"_builder": self.builder}
-            sig = inspect.signature(fn)
-            if '_generator' in sig.parameters:
-                extra_kwargs['_generator'] = self
-            try:
-                return fn(*args, **extra_kwargs, **kws)
-            except Exception as e:
-                # Normally when we raise a CompilationError, we raise it as
-                # `from None`, because the original fileline from the exception
-                # is not relevant (and often points into code_generator.py
-                # itself).  But when calling a function, we raise as `from e` to
-                # preserve the traceback of the original error, which may e.g.
-                # be in core.py.
-                raise CompilationError(self.jit_fn.src, node, None) from e
 
-        if fn in self.builtin_namespace.values():
-            args = map(_unwrap_if_constexpr, args)
-        return fn(*args, **kws)
+        try:
+            return self.call_non_JitFunction(fn, *args, **kws)
+        except Exception as e:
+            # Normally when we raise a CompilationError, we raise it as
+            # `from None`, because the original fileline from the exception
+            # is not relevant (and often points into code_generator.py
+            # itself).  But when calling a function, we raise as `from e` to
+            # preserve the traceback of the original error, which may e.g.
+            # be in core.py.
+            raise CompilationError(self.jit_fn.src, node, None) from e
 
     def visit_Constant(self, node):
         return constexpr(node.value)
