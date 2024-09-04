@@ -69,23 +69,16 @@ def setup_generated_mlir_docs():
             lines.insert(0, "# " + op.split(".md")[0])
             f.seek(0)
             f.writelines(lines)
-    ops = "\n   ".join(["./" + op for op in ops])
 
     rst_string = f"""
 Triton MLIR Dialects and Ops
-=====================
+============================
 
 .. toctree::
    :maxdepth: 1
    :caption: Dialects
 
    {dialects}
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Dialect Ops
-
-   {ops}
 """
     with open(dst_path / "dialects.rst", "w+") as f:
         f.write(rst_string)
