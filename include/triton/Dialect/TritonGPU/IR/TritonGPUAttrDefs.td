@@ -73,8 +73,8 @@ def CTALayoutAttr : TritonGPU_Attr<"CTALayout", "cta_layout"> {
   );
 
   let description = [{
-Describes how blocks are distributed among the cooperate thread arrays (aka
-CTAs, aka thread blocks) in a cooperate thread group (aka CTG, aka thread group
+Describes how blocks are distributed among the cooperative thread arrays (aka
+CTAs, aka thread blocks) in a cooperative thread group (aka CTG, aka thread group
 cluster).  CGAs were introduced in Hopper (sm90).
 
 The tensor is divided up into CTASplitNum pieces, which are distributed among
@@ -165,28 +165,33 @@ Here are some examples.  In all cases, the input tensor is [0, 1, ..., n-1].
 
 1. Basic swizzling
 
+  ```
   #shared<{vec=1, perPhase=1, maxPhase=4, order=[1,0]}>
   [ 0,  1,  2,  3],  // xor with 0
   [ 5,  4,  7,  6],  // xor with 1
   [10, 11,  8,  9],  // xor with 2
   [15, 14, 13, 12]   // xor with 3
+  ```
 
 Here elements of row r are xor'ed with r (or more properly, in[r][c] ->
 out[r][c^r]).
 
 2. Multiple rows per phase
 
+  ```
   #shared<{vec=1, perPhase=2, maxPhase=4, order=[1,0]}>
   [ 0,  1,  2,  3],  // phase 0 (xor with 0)
   [ 4,  5,  6,  7],
   [ 9,  8, 11, 10],  // phase 1 (xor with 1)
   [13, 12, 15, 14]
+  ```
 
 Elements of row r are xor'ed with r/2.  In other words, perPhase=2
 means that pairs of 2 rows get the same swizzling.
 
 3. Max-phase applied
 
+  ```
   $shared<{vec=1, perPhase=1, maxPhase=2, order=[1,0]}>
   [ 0,  1,  2,  3],  // phase 0 (xor with 0)
   [ 5,  4,  7,  6],  // phase 1 (xor with 1)
@@ -196,12 +201,14 @@ means that pairs of 2 rows get the same swizzling.
   [21, 20, 23, 22],
   [24, 25, 26, 27],
   [29, 28, 31, 30]
+  ```
 
 Elements of row r are xor'ed with (r/2) % 2.  In other words, maxPhase=m has the
 effect of limiting the maximum value of the xor to m-1.
 
 4. Max-phase and per-phase
 
+  ```
   #shared<{vec=1, perPhase=2, maxPhase=2, order=[1,0]}>
   [ 0,  1,  2,  3],  // phase 0 (xor with 0)
   [ 4,  5,  6,  7],  // phase 0
@@ -211,6 +218,7 @@ effect of limiting the maximum value of the xor to m-1.
   [20, 21, 22, 23],  // phase 0
   [25, 24, 27, 26],  // phase 1
   [29, 28, 31, 30]]  // phase 1
+  ```
 
 Here the xor value (the "phase", I guess?) changes every perPhase rows, up to a
 maximum value of maxPhase-1.  In other words, elements of row r are xor'ed with
@@ -218,16 +226,20 @@ maximum value of maxPhase-1.  In other words, elements of row r are xor'ed with
 
 5. Adding vec
 
+  ```
   #shared<{vec=2, perPhase=1, maxPhase=4, order=[1,0]}>
   [ 0,  1,  2,  3,  4,  5,  6,  7],
   [10, 11,  8,  9, 14, 15, 12, 13],
   [20, 21, 22, 23, 16, 17, 18, 19],
   [30, 31, 28, 29, 26, 27, 24, 25]
+  ```
 
 When vec=2, elements are swizzled in pairs of 2.  In other words, the element at
 (r,c) has value
 
+  ```
   ((c / 2) ^ r) * 2 + (c % 2).
+  ```
 
 For MMAv3 eg Hopper GMMA, hasLeadingOffset should be true. In this case,
 when the matrix is stored in shared memory, there will be an offset not
@@ -600,6 +612,7 @@ specify the amount of elements owned by each CUDA thread, warp and CTA respectiv
 
 Example 1, a row-major coalesced layout may partition a 16x16 tensor over 2 warps (i.e. 64 threads) as follows:
 
+```
 [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]
 [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]
 [ 4  4  5  5  6  6  7  7  ; 36 36 37 37 38 38 39 39 ]
@@ -607,9 +620,11 @@ Example 1, a row-major coalesced layout may partition a 16x16 tensor over 2 warp
 ...
 [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]
 [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]
+```
 
 for
 
+```text
 #triton_gpu.blocked_layout<{
   sizePerThread = {2, 2}
   threadsPerWarp = {8, 4}
@@ -617,9 +632,11 @@ for
   CTAsPerCGA = {1, 1}
   CTASplitNum = {1, 1}
 }>
+```
 
 Example 2, a row-major coalesced layout may partition a 32x32 tensor over 2 warps (i.e. 64 threads) as follows:
 
+```
 [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35  0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]
 [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35  0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]
 [ 4  4  5  5  6  6  7  7  ; 36 36 37 37 38 38 39 39  4  4  5  5  6  6  7  7  ; 36 36 37 37 38 38 39 39 ]
@@ -634,8 +651,11 @@ Example 2, a row-major coalesced layout may partition a 32x32 tensor over 2 warp
 ...                                                 ...
 [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63  28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]
 [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63  28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]
+```
+
 for
 
+```text
 #triton_gpu.blocked_layout<{
   sizePerThread = {2, 2}
   threadsPerWarp = {8, 4}
@@ -643,10 +663,12 @@ for
   CTAsPerCGA = {1, 1}
   CTASplitNum = {1, 1}
 }>
+```
 
 Example 3, A row-major coalesced layout may partition a 32x32 tensor over 2 warps (i.e. 64 threads) and
 4 CTAs (taking 2x2 for example) as follows:
 
+```
 CTA [0,0]                                              CTA [0,1]
 [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]  [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]
 [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]  [ 0  0  1  1  2  2  3  3  ; 32 32 33 33 34 34 35 35 ]
@@ -664,8 +686,11 @@ CTA [1,0]                                              CTA [1,1]
 ...                                                    ...
 [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]  [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]
 [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]  [ 28 28 29 29 30 30 31 31 ; 60 60 61 61 62 62 63 63 ]
+```
+
 for
 
+```text
 #triton_gpu.blocked_layout<{
   sizePerThread = {2, 2}
   threadsPerWarp = {8, 4}
@@ -673,6 +698,7 @@ for
   CTAsPerCGA = {2, 2}
   CTASplitNum = {2, 2}
 }>
+```
 }];
 
   let parameters = (
@@ -821,6 +847,7 @@ Example 1:
 Suppose we have a tensor with a shape of [32, 64], warpsPerCTA set to [1, 2] and MDim=NDim=32.
 The data will be distributed between threads as follows:
 
+```
                 warp 0                                 warp 1
 -----------------/\--------------      -----------------/\--------------
 [ 0   1   2   3  ...... 30  31 ]      [ 64  65  66  67 ...... 94   95  ]
@@ -855,11 +882,13 @@ The data will be distributed between threads as follows:
 [ 32  33  34  35 ...... 62  63 ]      [ 96  97  98  99 ...... 126  127 ]
 [ 32  33  34  35 ...... 62  63 ]      [ 96  97  98  99 ...... 126  127 ]
 [ 32  33  34  35 ...... 62  63 ]      [ 96  97  98  99 ...... 126  127 ]
+```
 
 Example 2:
 Suppose we have a tensor with a shape of [16, 32], warpsPerCTA set to [1, 2] and MDim=NDim=16.
 The data will be distributed between threads as follows:
 
+```
                 warp 0                                 warp 1
 -----------------/\-------------      ------------------/\---------------
 [ 0   1   2   3  ...... 14  15 ]      [ 64  65  66  67  ...... 78   79  ]
@@ -878,6 +907,7 @@ The data will be distributed between threads as follows:
 [ 48  49  50  51 ...... 62  63 ]      [ 112 113 114 115 ...... 126  127 ]
 [ 48  49  50  51 ...... 62  63 ]      [ 112 113 114 115 ...... 126  127 ]
 [ 48  49  50  51 ...... 62  63 ]      [ 112 113 114 115 ...... 126  127 ]
+```
 
 Example 3:
 Suppose we have a tensor with a shape of [8, 8], warpsPerCTA set to [2, 2] and nonKDim set to 4.
@@ -885,6 +915,7 @@ The data will be distributed between threads as follows(note that each element i
 Suppose we have a tensor with a shape of [8, 8], warpsPerCTA set to [2, 2] and MDim=NDim=4.
 The data will be distributed between threads as follows(note that each element is duplicated in 16 threads):
 
+```
 M  N ->                    warp 0                                                       warp 2
 | --------------------------/\--------------------------   ------------------------------/\------------------------------
 V [ 0,4,8...60   1,5...61     2,6...62     3,7...63    ]   [ 128,132...188  129,133...189  130,134...190  131,135...191 ]
@@ -897,6 +928,7 @@ V [ 0,4,8...60   1,5...61     2,6...62     3,7...63    ]   [ 128,132...188  129,
   [ 64,68...124  65,69...125  66,70...126  67,71...127 ]   [ 192,196...252  193,197...253  194,198...254  195,199...255 ]
   [ 64,68...124  65,69...125  66,70...126  67,71...127 ]   [ 192,196...252  193,197...253  194,198...254  195,199...255 ]
   [ 64,68...124  65,69...125  66,70...126  67,71...127 ]   [ 192,196...252  193,197...253  194,198...254  195,199...255 ]
+```
 }];
 
   let parameters = (
@@ -957,6 +989,7 @@ Suppose we have a tensor with shape [32, 64], `warpsPerCTA` set to [2, 2].
 Matrix elements represent which lane owns the element. Currently only wave32 mode
 is supported.
 
+```
 // ----------------------------------- version = 1 ----------------------------------- //
 
 Row |                  warp 0                                    warp 2
@@ -1006,6 +1039,7 @@ Row |       warp 0                warp 2
 ..  | ...                  ...
 30  |[16 17 18 ... 30 31] [16 17 18 ... 30 31]
 31  |[16 17 18 ... 30 31] [16 17 18 ... 30 31]
+```
   }];
 
   let parameters = (
@@ -1066,7 +1100,7 @@ https://docs.nvidia.com/cuda/parallel-thread-execution/index.html
 
 For example, when versionMinor=1, the matrix L corresponding to
 blockTileSize=[32,16] is:
-
+```
                                warp 0
 --------------------------------/\-------------------------------
 [ 0   0   2   2   8   8   10  10   0   0   2   2   8   8   10  10 ]
@@ -1091,6 +1125,7 @@ blockTileSize=[32,16] is:
 [ 32  32  34  34  40  40  42  42   32  32  34  34  40  40  42  42 ]
 [ 33  33  35  35  41  41  43  43   33  33  35  35  41  41  43  43 ]
 [ ............................................................... ]
+```
 
 
 // -------------------------------- version = 2 --------------------------- //
@@ -1101,6 +1136,7 @@ https://docs.nvidia.com/cuda/parallel-thread-execution/index.html
 (mma.16816 section, FP32 accumulator).
 
 For example, the matrix L corresponding to blockTileSize=[32,16] is:
+```
                 warp 0                          warp 2
 -----------------/\-------------  ----------------/\-------------
 [ 0   0   1   1   2   2   3   3   32  32  33  33  34  34  35  35
@@ -1122,6 +1158,7 @@ For example, the matrix L corresponding to blockTileSize=[32,16] is:
 [ 68  68  69  69  70  70  71  71  100 100 101 101 102 102 103 103
 [ ..............................  ...............................
 [ 92  92  93  93  94  94  95  95  124 124 125 125 126 126 127 127
+```
 
 }];
 
