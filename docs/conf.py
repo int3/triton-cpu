@@ -28,6 +28,7 @@ import shutil
 import sys
 import sysconfig
 from pathlib import Path
+from textwrap import dedent
 
 import sphinx_rtd_theme
 from sphinx_gallery.sorting import FileNameSortKey
@@ -59,17 +60,27 @@ def setup_generated_mlir_docs():
 
     files = os.listdir(dst_path)
 
-    dialects = "\n   ".join(["./" + f for f in files if "Dialect" in f])
-    ops = [f for f in files if "Ops" in f]
+    dialects = ["./" + f for f in files if "Dialect" in f]
 
-    # Add titles
-    for op in ops:
-        with open(dst_path / op, 'r+') as f:
+    # myst-parser doesn't recognize special [TOC] marker
+    for dialect in dialects:
+        with open(dst_path / dialect, 'r+') as f:
             lines = f.readlines()
-            lines.insert(0, "# " + op.split(".md")[0])
             f.seek(0)
-            f.writelines(lines)
+            for line in lines:
+                if line.rstrip() != "[TOC]":
+                    f.write(line)
+                    continue
+                f.write(
+                    dedent("""
+                    ```{contents} Table of Contents
+                    :depth: 1
+                    :local:
+                    :backlinks: none
+                    ```
+                """))
 
+    dialects_str = "\n   ".join(dialects)
     rst_string = f"""
 Triton MLIR Dialects and Ops
 ============================
@@ -78,7 +89,7 @@ Triton MLIR Dialects and Ops
    :maxdepth: 1
    :caption: Dialects
 
-   {dialects}
+   {dialects_str}
 """
     with open(dst_path / "dialects.rst", "w+") as f:
         f.write(rst_string)
